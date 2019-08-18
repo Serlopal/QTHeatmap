@@ -4,20 +4,21 @@ from PyQt5.QtWidgets import QApplication, QLabel, QFileDialog, QTextEdit,\
 from PyQt5.QtCore import Qt, QObject, pyqtSignal, pyqtSlot, QThread, QSize, QPoint
 from PyQt5.QtGui import QFont, QTextCursor, QTextDocument, QPalette, QAbstractTextDocumentLayout, QPainter, \
 			QBrush, QPen, QPalette, QColor
-
+import numpy as np
 
 class TileWidget(QWidget):
 	tile_emitter = pyqtSignal(object)
 
-	def __init__(self):
+	def __init__(self, step_mod):
 		super().__init__()
 		self.value = 0
 		self.color = [0, 0, 255]
 		self.step_dir = [0, 1, 0]
-		self.step_mod = 5
+		self.step_mod = step_mod
 		self.size = 15
 		self.tile_emitter.connect(lambda x: self.update_tile(x))
 		self.setMouseTracking(True)
+		self.neighbours = []
 
 	def update_tile(self, new_heat):
 		self.value = new_heat
@@ -47,11 +48,16 @@ class TileWidget(QWidget):
 
 		return
 
-	def heat_up(self, step_mod = None):
+	def add_neighbour(self, neighbour_tile, d):
+		self.neighbours.append((neighbour_tile, d))
+
+	def heat_up(self, step_mod=None):
 		self.value += 1
 
-		new_color = [x + y for x, y in zip([x*self.step_mod for x in self.step_dir], self.color)]
-		print(new_color)
+		if not step_mod:
+			step_mod = self.step_mod
+
+		new_color = [x + y for x, y in zip([x*step_mod for x in self.step_dir], self.color)]
 		if new_color[1] > 255:
 			self.step_dir = [0, 0, -1]
 		if new_color[2] < 0:
@@ -64,6 +70,10 @@ class TileWidget(QWidget):
 	def mouseMoveEvent(self, event):
 		self.heat_up()
 		self.repaint()
+
+		for neighbour, d in self.neighbours:
+			neighbour.heat_up(int((1/d)*self.step_mod))
+			neighbour.repaint()
 
 
 class HeatMapUI:
@@ -81,19 +91,22 @@ class HeatMapUI:
 		# set window geometry
 		ag = QDesktopWidget().availableGeometry()
 		self.window.move(int(ag.width()*0.15), int(ag.height()*0.05))
-		self.window.setMinimumWidth(int(ag.width()*0.7))
-		self.window.setMinimumHeight(int(ag.height()*0.7))
-		self.window.setMaximumWidth(int(ag.width()*0.7))
-		self.window.setMaximumHeight(int(ag.height()*0.7))
+		self.window.setMinimumWidth(int(ag.width()*0.35))
+		self.window.setMinimumHeight(int(ag.height()*0.35))
+		self.window.setMaximumWidth(int(ag.width()*0.35))
+		self.window.setMaximumHeight(int(ag.height()*0.35))
 
 		# create placeholders for widgets
-		self.pressure_map_group =None
+		self.pressure_map_group = None
 		self.raw_value_group = None
 		self.point_labels = []
 		self.point_values = []
 
-		self.heatmap_height = 40
-		self.heatmap_width = 140
+		self.heatmap_height = 20
+		self.heatmap_width = 70
+
+		self.nradius = 8
+		self.step_mod = 160
 
 		self.add_widgets()
 
@@ -106,15 +119,25 @@ class HeatMapUI:
 	def add_widgets(self):
 		self.pressure_map_group = QGroupBox("Pressure map")
 		layout = QGridLayout()
-		tiles = []
+		tiles_and_coords = []
 		# create grid of tiles
 		for i in range(self.heatmap_height):
 			for j in range(self.heatmap_width):
-				tile = TileWidget()
-				tiles.append(tile)
+				tile = TileWidget(step_mod=self.step_mod)
+				tiles_and_coords.append((tile, (i, j)))
 				layout.addWidget(tile, i, j, 1, 1)
 		# feed neighbours to each tile
 
+		def dist(p1, p2):
+			return np.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
+
+		for tile, ij in tiles_and_coords:
+			for neighbour_tile, neighbour_ij in tiles_and_coords:
+				d = dist(ij, neighbour_ij)
+				if ij != neighbour_ij and d < self.nradius:
+					tile.add_neighbour(neighbour_tile, d)
+
+		# remove space between tiles
 		layout.setSpacing(0)
 		self.pressure_map_group.setLayout(layout)
 
