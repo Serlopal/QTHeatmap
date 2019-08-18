@@ -5,12 +5,15 @@ from PyQt5.QtCore import Qt, QObject, pyqtSignal, pyqtSlot, QThread, QSize, QPoi
 from PyQt5.QtGui import QFont, QTextCursor, QTextDocument, QPalette, QAbstractTextDocumentLayout, QPainter, \
 			QBrush, QPen, QPalette, QColor
 import numpy as np
+from scipy.stats import norm
+
 
 class TileWidget(QWidget):
 	tile_emitter = pyqtSignal(object)
 
-	def __init__(self, step_mod):
+	def __init__(self, step_mod, nradius):
 		super().__init__()
+		self.nradius = nradius
 		self.value = 0
 		self.color = [0, 0, 255]
 		self.step_dir = [0, 1, 0]
@@ -68,11 +71,11 @@ class TileWidget(QWidget):
 		self.color = [max(min(x, 255), 0) for x in new_color]
 
 	def mouseMoveEvent(self, event):
-		self.heat_up()
+		self.heat_up(step_mod=int(norm.pdf(0)*self.step_mod))
 		self.repaint()
 
 		for neighbour, d in self.neighbours:
-			neighbour.heat_up(int((1/d)*self.step_mod))
+			neighbour.heat_up(int((norm.pdf(d/self.nradius))*self.step_mod))
 			neighbour.repaint()
 
 
@@ -91,10 +94,11 @@ class HeatMapUI:
 		# set window geometry
 		ag = QDesktopWidget().availableGeometry()
 		self.window.move(int(ag.width()*0.15), int(ag.height()*0.05))
-		self.window.setMinimumWidth(int(ag.width()*0.7))
-		self.window.setMinimumHeight(int(ag.height()*0.7))
-		self.window.setMaximumWidth(int(ag.width()*0.7))
-		self.window.setMaximumHeight(int(ag.height()*0.7))
+		window_dim = 0.35
+		self.window.setMinimumWidth(int(ag.width()*window_dim))
+		self.window.setMinimumHeight(int(ag.height()*window_dim*2))
+		self.window.setMaximumWidth(int(ag.width()*window_dim))
+		self.window.setMaximumHeight(int(ag.height()*window_dim*2))
 
 		# create placeholders for widgets
 		self.pressure_map_group = None
@@ -103,10 +107,10 @@ class HeatMapUI:
 		self.point_values = []
 
 		self.heatmap_height = 40
-		self.heatmap_width = 140
+		self.heatmap_width = 70
 
-		self.nradius = 8
-		self.step_mod = 200
+		self.nradius = 4
+		self.step_mod = 100
 
 		self.add_widgets()
 
@@ -124,7 +128,7 @@ class HeatMapUI:
 		for i in range(self.heatmap_height):
 			row = []
 			for j in range(self.heatmap_width):
-				tile = TileWidget(step_mod=self.step_mod)
+				tile = TileWidget(step_mod=self.step_mod, nradius=self.nradius)
 				row.append((tile, (i, j)))
 				layout.addWidget(tile, i, j, 1, 1)
 			tiles_grid.append(row)
