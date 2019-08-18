@@ -91,10 +91,10 @@ class HeatMapUI:
 		# set window geometry
 		ag = QDesktopWidget().availableGeometry()
 		self.window.move(int(ag.width()*0.15), int(ag.height()*0.05))
-		self.window.setMinimumWidth(int(ag.width()*0.35))
-		self.window.setMinimumHeight(int(ag.height()*0.35))
-		self.window.setMaximumWidth(int(ag.width()*0.35))
-		self.window.setMaximumHeight(int(ag.height()*0.35))
+		self.window.setMinimumWidth(int(ag.width()*0.7))
+		self.window.setMinimumHeight(int(ag.height()*0.7))
+		self.window.setMaximumWidth(int(ag.width()*0.7))
+		self.window.setMaximumHeight(int(ag.height()*0.7))
 
 		# create placeholders for widgets
 		self.pressure_map_group = None
@@ -102,11 +102,11 @@ class HeatMapUI:
 		self.point_labels = []
 		self.point_values = []
 
-		self.heatmap_height = 20
-		self.heatmap_width = 70
+		self.heatmap_height = 40
+		self.heatmap_width = 140
 
 		self.nradius = 8
-		self.step_mod = 160
+		self.step_mod = 200
 
 		self.add_widgets()
 
@@ -119,23 +119,32 @@ class HeatMapUI:
 	def add_widgets(self):
 		self.pressure_map_group = QGroupBox("Pressure map")
 		layout = QGridLayout()
-		tiles_and_coords = []
+		tiles_grid = []
 		# create grid of tiles
 		for i in range(self.heatmap_height):
+			row = []
 			for j in range(self.heatmap_width):
 				tile = TileWidget(step_mod=self.step_mod)
-				tiles_and_coords.append((tile, (i, j)))
+				row.append((tile, (i, j)))
 				layout.addWidget(tile, i, j, 1, 1)
+			tiles_grid.append(row)
 		# feed neighbours to each tile
 
 		def dist(p1, p2):
 			return np.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
 
-		for tile, ij in tiles_and_coords:
-			for neighbour_tile, neighbour_ij in tiles_and_coords:
-				d = dist(ij, neighbour_ij)
-				if ij != neighbour_ij and d < self.nradius:
-					tile.add_neighbour(neighbour_tile, d)
+		# we now iterate over the grid of tiles
+		for row in tiles_grid:
+			for tile, coords in row:
+				i, j = coords
+				# now for the neighbours in as square neighbourhood of side nradius, we check who is at a distance d
+				for neighbour_row in tiles_grid[max(0, i - self.nradius):min(self.heatmap_height, i + self.nradius)]:
+					for neighbour_tile in neighbour_row[max(0, j - self.nradius):min(self.heatmap_width, j + self.nradius)]:
+						ncoords = neighbour_tile[1]
+						ntile = neighbour_tile[0]
+						d = dist(coords, ncoords)
+						if coords != ncoords and d < self.nradius:
+							tile.add_neighbour(ntile, d)
 
 		# remove space between tiles
 		layout.setSpacing(0)
