@@ -18,11 +18,11 @@ class PixelHeatMap(QWidget):
 		self.width = 400
 		self.height = 400
 
-		self.kernel_size = 61
+		self.kernel_size = 31
 		self.krad = int((self.kernel_size - 1) / 2)
 		self.kernel = self.generate_gaussian_kernel(self.kernel_size)
 
-		self.step = 100
+		self.step = 16
 
 		self._heatmap = np.stack([np.zeros((self.width, self.height)),
 								  np.zeros((self.width, self.height)),
@@ -127,7 +127,6 @@ class PixelHeatMap(QWidget):
 			mask = self._heatmap_index[v_before:v_after, h_before:h_after]
 
 			self._heatmap[v_before:v_after, h_before:h_after, :] = self.index2color_vectorizer(mask, path=self.color_path).astype('uint8')
-			print(np.mean(np.mean(np.mean(self._heatmap))))
 			self.repaint()
 
 
@@ -146,7 +145,7 @@ class HeatMapUI:
 		# set window geometry
 		ag = QDesktopWidget().availableGeometry()
 		self.window.move(int(ag.width()*0.15), int(ag.height()*0.05))
-		window_dim = 0.4
+		window_dim = 0.8
 		self.window.setMinimumWidth(int(ag.width()*window_dim))
 		self.window.setMinimumHeight(int(ag.height()*window_dim))
 		self.window.setMaximumWidth(int(ag.width()*window_dim))
