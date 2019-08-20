@@ -6,34 +6,35 @@ from PyQt5.QtGui import QFont, QTextCursor, QTextDocument, QPalette, QAbstractTe
 			QBrush, QPen, QPalette, QColor, QImage
 import numpy as np
 from scipy.stats import norm
+from scipy.stats import norm
 
 
 class PixelHeatMap(QWidget):
 	def __init__(self):
 		super().__init__()
 
-		self.step_mod = 40
 		self.color_path = self.generate_color_path()
 
 		self.width = 400
 		self.height = 400
 
-		self._heatmap = np.stack([255*np.ones((self.width, self.height)), np.zeros((self.width, self.height)), np.zeros((self.width, self.height))], axis=2)
-		# self._heatmap = np.stack([255*np.ones((self.width, self.height)), 255*np.ones((self.width, self.height)), 255*np.ones((self.width, self.height))], axis=2)
-		self._heatmap_index = np.zeros((self.width, self.height))
+		self.kernel_size = 61
+		self.krad = int((self.kernel_size - 1) / 2)
+		self.kernel = self.generate_gaussian_kernel(self.kernel_size)
+
+		self.step = 100
+
+		self._heatmap = np.stack([np.zeros((self.width, self.height)),
+								  np.zeros((self.width, self.height)),
+								  255*np.ones((self.width, self.height))], axis=2).astype('uint8')
+		self._heatmap_index = np.zeros((self.width, self.height), dtype='int32')
+
+		def index2color(idx, path):
+			return path[idx]
+
+		self.index2color_vectorizer = np.vectorize(index2color, excluded=['path'], otypes=[np.ndarray], signature='()->(n)')
 
 		self.setMouseTracking(True)
-
-	def paintEvent(self, e):
-		qp = QPainter()
-		qp.begin(self)
-		self.draw_widget(qp)
-		qp.end()
-
-	def draw_widget(self, qp):
-		height, width, channel = self._heatmap.shape
-		heatmap = QImage(self._heatmap.tobytes(), width, height, 3*width, QImage.Format_RGB666)
-		qp.drawImage(0, 0, heatmap)
 
 	@staticmethod
 	def generate_color_path():
@@ -52,18 +53,78 @@ class PixelHeatMap(QWidget):
 				step_dir = [0, -1, 0]
 
 			color = [max(min(x, 255), 0) for x in color]
-			path.append(color)
+			path.append(np.array(color).astype('uint8'))
 
 		return path
 
+	@staticmethod
+	def generate_gaussian_kernel(s):
+		def dist(p1, p2):
+			return np.sqrt((p2[0] - p1[0]) ** 2 + (p2[1] - p1[1]) ** 2)
+
+		# check valid kernel size
+		assert (s-1) % 2 == 0
+
+		kernel = np.zeros((s, s))
+		r = (s-1)/2
+		for i in range(s):
+			for j in range(s):
+				d = dist((r, r), (i, j))
+				if d < r:
+					norm_d = d/s if d != 0 else d
+					kernel[i, j] = norm.pdf(norm_d)
+				else:
+					kernel[i, j] = 0
+		return kernel
+
+	def paintEvent(self, e):
+		qp = QPainter()
+		qp.begin(self)
+		self.draw_widget(qp)
+		qp.end()
+
+	def draw_widget(self, qp):
+
+		transposed_heatmap = np.transpose(self._heatmap, axes=(1, 0, 2))
+		width, height, channels = transposed_heatmap.shape
+
+		heatmap = QImage(transposed_heatmap.tobytes(), width, height, 3*width, QImage.Format_RGB888)
+		qp.drawImage(0, 0, heatmap)
+
 	def mouseMoveEvent(self, event):
 		coords = event.pos()
-		print(coords)
 		x, y = coords.x(), coords.y()
 
-		if x <= self.width and y <= self.height:
-			self._heatmap_index[x, y] += 1
-			self._heatmap[x, y, :] = self.color_path[int(self._heatmap_index[x, y])]
+		if 0 < x < self.width and 0 < y < self.height:
+
+			# create heatmap sized, gaussian kernel mask
+			hpad_before = int(x - self.krad) - 1
+			hpad_after = int(self.width - (x + self.krad))
+			vpad_before = int(y - self.krad) - 1
+			vpad_after = int(self.height - (y + self.krad))
+			# if any of the padding dimensions is negative, we must trim the kernel in that direction
+			kernel = self.kernel
+
+			if hpad_before < 0:
+				kernel = kernel[:, abs(hpad_before):]
+				hpad_before = 0
+			if hpad_after < 0:
+				kernel = kernel[:, 0:hpad_after]
+				hpad_after = 0
+			if vpad_before < 0:
+				kernel = kernel[abs(vpad_before):, :]
+				vpad_before = 0
+			if vpad_after < 0:
+				kernel = kernel[:, 0:vpad_after]
+				vpad_after = 0
+
+			# TODO if the kernel is not inside the heatmap, trim it and then pad 0 in that direction...
+			mask = (np.pad(kernel, ((vpad_before, vpad_after), (hpad_before, hpad_after)), mode='constant') * self.step).astype('int32')
+			# increase color index heatmap
+			self._heatmap_index += mask
+
+			# cast heatmap of color index to true _heatmap
+			self._heatmap = self.index2color_vectorizer(self._heatmap_index, path=self.color_path).astype('uint8')
 			self.repaint()
 
 
@@ -80,13 +141,13 @@ class HeatMapUI:
 		self.window.setWindowTitle(ui_name)
 		self.window.setObjectName(ui_name)
 		# set window geometry
-		# ag = QDesktopWidget().availableGeometry()
-		# self.window.move(int(ag.width()*0.15), int(ag.height()*0.05))
-		# window_dim = 0.4
-		# self.window.setMinimumWidth(int(ag.width()*window_dim))
-		# self.window.setMinimumHeight(int(ag.height()*window_dim))
-		# self.window.setMaximumWidth(int(ag.width()*window_dim))
-		# self.window.setMaximumHeight(int(ag.height()*window_dim))
+		ag = QDesktopWidget().availableGeometry()
+		self.window.move(int(ag.width()*0.15), int(ag.height()*0.05))
+		window_dim = 0.4
+		self.window.setMinimumWidth(int(ag.width()*window_dim))
+		self.window.setMinimumHeight(int(ag.height()*window_dim))
+		self.window.setMaximumWidth(int(ag.width()*window_dim))
+		self.window.setMaximumHeight(int(ag.height()*window_dim))
 
 		# create placeholders for widget
 		self.heatmap = None

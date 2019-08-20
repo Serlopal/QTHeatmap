@@ -18,7 +18,8 @@ class TileWidget(QWidget):
 		self.color = [0, 0, 255]
 		self.step_dir = [0, 1, 0]
 		self.step_mod = step_mod
-		self.size = 15
+		self.width = 4
+		self.height = 7
 		self.tile_emitter.connect(lambda x: self.update_tile(x))
 		self.setMouseTracking(True)
 		self.neighbours = []
@@ -43,7 +44,7 @@ class TileWidget(QWidget):
 		# draw wheel ring
 		qp.setPen(QPen(QColor(*self.color), 3, Qt.SolidLine))
 		qp.setBrush(QBrush(QColor(*self.color), Qt.SolidPattern))
-		qp.drawRect(0, 0, self.size, self.size)
+		qp.drawRect(0, 0, self.width, self.height)
 
 		# qp.setFont(QFont("times", 12))
 		# qp.setPen(QPen(Qt.white, 12, Qt.SolidLine))
@@ -69,6 +70,7 @@ class TileWidget(QWidget):
 			self.step_dir = [0, -1, 0]
 
 		self.color = [max(min(x, 255), 0) for x in new_color]
+		print(self.color)
 
 	def mouseMoveEvent(self, event):
 		self.heat_up(step_mod=int(norm.pdf(0)*self.step_mod))
@@ -94,23 +96,23 @@ class HeatMapUI:
 		# set window geometry
 		ag = QDesktopWidget().availableGeometry()
 		self.window.move(int(ag.width()*0.15), int(ag.height()*0.05))
-		window_dim = 0.35
+		window_dim = 0.15
 		self.window.setMinimumWidth(int(ag.width()*window_dim))
 		self.window.setMinimumHeight(int(ag.height()*window_dim*2))
 		self.window.setMaximumWidth(int(ag.width()*window_dim))
 		self.window.setMaximumHeight(int(ag.height()*window_dim*2))
 
-		# create placeholders for widgets
+		# create placeholders for widget
 		self.pressure_map_group = None
 		self.raw_value_group = None
 		self.point_labels = []
 		self.point_values = []
 
-		self.heatmap_height = 40
-		self.heatmap_width = 70
+		self.heatmap_height = 80
+		self.heatmap_width = 80
 
-		self.nradius = 4
-		self.step_mod = 100
+		self.nradius = 8
+		self.step_mod = 256
 
 		self.add_widgets()
 
