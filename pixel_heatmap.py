@@ -27,10 +27,13 @@ class PixelHeatMap(QWidget):
 		self._heatmap = np.stack([np.zeros((self.width, self.height)),
 								  np.zeros((self.width, self.height)),
 								  255*np.ones((self.width, self.height))], axis=2).astype('uint8')
-		self._heatmap_index = np.zeros((self.width, self.height), dtype='int32')
+		self._heatmap_index = np.zeros((self.width, self.height), dtype='uint32')
 
 		def index2color(idx, path):
-			return path[idx]
+			if idx < len(path):
+				return path[idx]
+			else:
+				return path[-1]
 
 		self.index2color_vectorizer = np.vectorize(index2color, excluded=['path'], otypes=[np.ndarray], signature='()->(n)')
 
@@ -85,7 +88,8 @@ class PixelHeatMap(QWidget):
 
 	def draw_widget(self, qp):
 
-		transposed_heatmap = np.transpose(self._heatmap, axes=(1, 0, 2))
+		# transposed_heatmap = np.transpose(self._heatmap, axes=(1, 0, 2))
+		transposed_heatmap = self._heatmap
 		width, height, channels = transposed_heatmap.shape
 
 		heatmap = QImage(transposed_heatmap.tobytes(), width, height, 3*width, QImage.Format_RGB888)
@@ -97,34 +101,33 @@ class PixelHeatMap(QWidget):
 
 		if 0 < x < self.width and 0 < y < self.height:
 
-			# create heatmap sized, gaussian kernel mask
-			hpad_before = int(x - self.krad) - 1
-			hpad_after = int(self.width - (x + self.krad))
-			vpad_before = int(y - self.krad) - 1
-			vpad_after = int(self.height - (y + self.krad))
-			# if any of the padding dimensions is negative, we must trim the kernel in that direction
+			h_before = int(x - self.krad)
+			h_after = int(x + self.krad) + 1
+			v_before = int(y - self.krad)
+			v_after = int(y + self.krad) + 1
+
+			# if any of the dimensions is negative, we must trim the kernel in that direction
 			kernel = self.kernel
 
-			if hpad_before < 0:
-				kernel = kernel[:, abs(hpad_before):]
-				hpad_before = 0
-			if hpad_after < 0:
-				kernel = kernel[:, 0:hpad_after]
-				hpad_after = 0
-			if vpad_before < 0:
-				kernel = kernel[abs(vpad_before):, :]
-				vpad_before = 0
-			if vpad_after < 0:
-				kernel = kernel[:, 0:vpad_after]
-				vpad_after = 0
+			if h_before < 0:
+				kernel = kernel[:, abs(h_before):]
+				h_before = 0
+			if h_after > self.width:
+				kernel = kernel[:, :-(h_after - self.width)]
+				h_after = self.width
+			if v_before < 0:
+				kernel = kernel[abs(v_before):, :]
+				v_before = 0
+			if v_after > self.height:
+				kernel = kernel[:-(v_after - self.height), :]
+				v_after = self.height
 
-			# TODO if the kernel is not inside the heatmap, trim it and then pad 0 in that direction...
-			mask = (np.pad(kernel, ((vpad_before, vpad_after), (hpad_before, hpad_after)), mode='constant') * self.step).astype('int32')
-			# increase color index heatmap
-			self._heatmap_index += mask
+			self._heatmap_index[v_before:v_after, h_before:h_after] += (kernel * self.step).astype('uint32')
 
-			# cast heatmap of color index to true _heatmap
-			self._heatmap = self.index2color_vectorizer(self._heatmap_index, path=self.color_path).astype('uint8')
+			mask = self._heatmap_index[v_before:v_after, h_before:h_after]
+
+			self._heatmap[v_before:v_after, h_before:h_after, :] = self.index2color_vectorizer(mask, path=self.color_path).astype('uint8')
+			print(np.mean(np.mean(np.mean(self._heatmap))))
 			self.repaint()
 
 
