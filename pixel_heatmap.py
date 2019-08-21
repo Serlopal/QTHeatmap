@@ -18,6 +18,9 @@ class PixelHeatMap(QWidget):
 		self.width = 400
 		self.height = 400
 
+		c = self.rect().center()
+		self.center = c.x() - self.width/2, c.y() - self.height/2
+
 		self.kernel_size = 31
 		self.krad = int((self.kernel_size - 1) / 2)
 		self.kernel = self.generate_gaussian_kernel(self.kernel_size)
@@ -87,13 +90,8 @@ class PixelHeatMap(QWidget):
 		qp.end()
 
 	def draw_widget(self, qp):
-
-		# transposed_heatmap = np.transpose(self._heatmap, axes=(1, 0, 2))
-		transposed_heatmap = self._heatmap
-		width, height, channels = transposed_heatmap.shape
-
-		heatmap = QImage(transposed_heatmap.tobytes(), width, height, 3*width, QImage.Format_RGB888)
-		qp.drawImage(0, 0, heatmap)
+		heatmap = QImage(self._heatmap.tobytes(), self.width, self.height, 3*self.width, QImage.Format_RGB888)
+		qp.drawImage(*self.center, heatmap)
 
 	def mouseMoveEvent(self, event):
 		coords = event.pos()
