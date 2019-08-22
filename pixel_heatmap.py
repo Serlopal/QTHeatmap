@@ -216,7 +216,7 @@ class HeatMapUI:
 		krad_slider = InfoSlider(20, 100, 0)
 		krad_slider.on_slide([lambda x: setattr(self.heatmap, "krad", x if x % 2 else x-1),
 							   self.heatmap.generate_gaussian_kernel,
-							   lambda x: krad_slider.change_value(x)])
+							   lambda x: krad_slider.change_value(x if x % 2 else x-1)])
 		main_layout.addWidget(krad_slider, 0, 13, 9, 1)
 
 		speed_slider = InfoSlider(self.heatmap.speed, 100, 0)
