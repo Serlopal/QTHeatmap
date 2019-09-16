@@ -136,35 +136,33 @@ class PixelHeatMap(QWidget):
 		coords = event.pos()
 		x, y = coords.x(), coords.y()
 
-		if 0 < x < self.width and 0 < y < self.height:
+		h_before = int(x - self.krad)
+		h_after = int(x + self.krad) + 1
+		v_before = int(y - self.krad)
+		v_after = int(y + self.krad) + 1
 
-			h_before = int(x - self.krad)
-			h_after = int(x + self.krad) + 1
-			v_before = int(y - self.krad)
-			v_after = int(y + self.krad) + 1
+		# if any of the dimensions is negative, we must trim the kernel in that direction
+		kernel = self.kernel
 
-			# if any of the dimensions is negative, we must trim the kernel in that direction
-			kernel = self.kernel
+		if h_before < 0:
+			kernel = kernel[:, abs(h_before):]
+			h_before = 0
+		if h_after > self.width:
+			kernel = kernel[:, :-(h_after - self.width)]
+			h_after = self.width
+		if v_before < 0:
+			kernel = kernel[abs(v_before):, :]
+			v_before = 0
+		if v_after > self.height:
+			kernel = kernel[:-(v_after - self.height), :]
+			v_after = self.height
 
-			if h_before < 0:
-				kernel = kernel[:, abs(h_before):]
-				h_before = 0
-			if h_after > self.width:
-				kernel = kernel[:, :-(h_after - self.width)]
-				h_after = self.width
-			if v_before < 0:
-				kernel = kernel[abs(v_before):, :]
-				v_before = 0
-			if v_after > self.height:
-				kernel = kernel[:-(v_after - self.height), :]
-				v_after = self.height
+		self._heatmap_index[v_before:v_after, h_before:h_after] += (kernel * self.speed).astype('uint32')
 
-			self._heatmap_index[v_before:v_after, h_before:h_after] += (kernel * self.speed).astype('uint32')
+		mask = self._heatmap_index[v_before:v_after, h_before:h_after]
 
-			mask = self._heatmap_index[v_before:v_after, h_before:h_after]
-
-			self._heatmap[v_before:v_after, h_before:h_after, :] = self.index2color_vectorizer(mask, path=self.color_path).astype('uint8')
-			self.repaint()
+		self._heatmap[v_before:v_after, h_before:h_after, :] = self.index2color_vectorizer(mask, path=self.color_path).astype('uint8')
+		self.repaint()
 
 
 class HeatMapUI:
